@@ -29,7 +29,7 @@ Un Helm Chart es un paquete preconfigurado que facilita la gestión de aplicacio
 
 ### Google Kubernetes Engine (GKE)
 
-Google Kubernetes Engine (GKE) es un servicio gestionado que facilita el despliegue y escalado de aplicaciones en contenedores. Al integrar Jenkins y Helm, se optimiza el despliegue de microservicios en paralelo: Jenkins automatiza el proceso de construcción y despliegue, mientras que Helm simplifica la gestión de configuraciones en GKE, mejorando la eficiencia y reduciendo errores en el
+Google Kubernetes Engine (GKE) es un servicio gestionado que facilita el despliegue y escalado de aplicaciones en contenedores. Al integrar Jenkins y Helm, se optimiza el despliegue de microservicios en paralelo: Jenkins automatiza el proceso de construcción y despliegue, mientras que Helm simplifica la gestión de configuraciones en GKE, mejorando la eficiencia y reduciendo errores en el flujo CI/CD.
 
 <div style="text-align: center;">
   <img src="/asset/logo_GKE.png" alt="GKE Logo" style="max-width: 100%; height: auto;">
