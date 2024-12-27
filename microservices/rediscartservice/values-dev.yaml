@@ -1,0 +1,21 @@
+# Default values for redis.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+app:
+  name: redis-cart
+  replicaCount: 2
+
+image:
+  repository: redis
+  tag: alpine
+
+container:
+  port: 6379
+
+volume:
+  name: redis-data
+  mountPath: /data
+
+service:
+  port: 6379

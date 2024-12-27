@@ -1,0 +1,21 @@
+app:
+  name: adservice
+  version: v0.4.1
+  replicaCount: 2
+
+image:
+  repository: gcr.io/google-samples/microservices-demo/adservice
+
+container:
+  port: 9555
+  env:
+  - name: PORT
+    value: "9555"
+  - name: DISABLE_STATS
+    value: "1"
+  - name: DISABLE_TRACING
+    value: "1"
+
+service:
+  type: ClusterIP
+  port: 9555

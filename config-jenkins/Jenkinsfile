@@ -1,0 +1,130 @@
+pipeline {
+    options {
+        buildDiscarder logRotator(numToKeepStr: '10')
+        timestamps()
+    }
+    
+    agent {
+        label "jenkins-slave"
+    }
+        parameters {
+        booleanParam(name: 'force', defaultValue: false, description: 'Force the pipeline to proceed regardless of changes')
+    }
+    
+    stages {
+        stage("Checkout Code Changes") {
+            when {
+                not {
+                    anyOf {
+                        expression { params.force }
+                        changeset "microservices/**/values-dev.yaml"
+                    }
+                }
+            }
+            steps {
+                script{                    
+                       currentBuild.result = 'ABORTED'   
+                       echo " No changes detected in values-dev.yaml , canceling the build "
+                       echo " Deploy aborted due to no changes detected "
+                }
+            }
+        }
+        stage("Checkout Commit and Branch") {
+            when {
+                allOf {
+                    expression { currentBuild.result != "ABORTED" }
+                }
+            }
+            steps {
+                script {
+                    echo "======== Commit and Branch ========"
+                    env.GIT_COMMIT = sh(returnStdout: true, script: "git rev-parse --short=10 HEAD").trim()
+                    env.GIT_BRANCH = sh(returnStdout: true, script: "git rev-parse --abbrev-ref HEAD").trim()
+                    echo "=====> Current Git Commit: ${env.GIT_COMMIT}"
+                    echo "=====> Current Git Branch: ${env.GIT_BRANCH}"
+                }
+            }
+        }
+        stage("Checkout Microservices") {
+            when{
+                expression { currentBuild.result != 'ABORTED' }
+            }
+            steps {
+                script {
+                    echo "========Checking Microservices ========"
+                    env.MICROSERVICES = sh(returnStdout: true, script: "git diff-tree --no-commit-id --name-only -r HEAD -- microservices | grep -v 'Jenkinsfile' | grep -v 'ingress' | xargs -n1 dirname | xargs -n1 basename | sort -u").trim()
+                    def microservicesList = env.MICROSERVICES.split('\n')
+                    if (!env.MICROSERVICES) {
+                        error "No microservices detected for deployment."
+                        currentBuild.result = 'ABORTED'
+                    }
+
+                    echo "Microservice(s) to be deployed:"
+                    echo "${env.MICROSERVICES}"
+
+                    microservicesList.each { microservice ->
+                        if (!fileExists("microservices/${microservice}/values-dev.yaml")) {
+                            error "The values-dev.yaml file does not exist for microservice: ${microservice}"
+                            currentBuild.result = 'ABORTED'
+                        }
+                        def yamlContent = readYaml file: "microservices/${microservice}/values-dev.yaml"
+                        if (!yamlContent?.image?.tag) {
+                            error "The image tag is not defined for microservice: ${microservice} in values-dev.yaml"
+                        } else {
+                            echo "Microservice: ${microservice}, Image Tag: ${yamlContent.image.tag}"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage("Deploy to DEV Environment") {
+            when{
+                expression { currentBuild.result != 'ABORTED' }
+            }            
+             steps {
+                container('gcloud') {
+                        script {
+                            echo "======== Deploying to DEV ========"
+                            sh("gcloud container clusters jenkins-cluster --zone us-central1-a --project   get-credentials")
+                            
+                            def microservicesList = env.MICROSERVICES.split('\n').toList()
+                                                        
+                            int numGroups = 4 
+                            def groupSize = (int) Math.ceil((microservicesList.size() / (double) numGroups))
+                            
+                            def groupedMicroservices = microservicesList.collate(groupSize)
+
+                            def deployJobs = [:]
+
+                            groupedMicroservices.eachWithIndex { group, idx ->
+                                def groupName = "Group ${idx + 1} Deployments"
+                                deployJobs[groupName] = {
+                                    group.each { microservice ->
+                                        deployMicroservice(microservice)
+                                    }
+                                }
+                            }                            
+                            parallel deployJobs
+                            
+                            sh("kubectl -n dev get pods")
+                        }
+                }
+           }
+        }
+    }
+}
+
+
+def deployMicroservice(microservice) {
+    try {
+            sh """  if ! helm upgrade ${microservice} ./microservices/${microservice} --install --wait --atomic --timeout=600s -n dev -f ./microservices/${microservice}/values-dev.yaml --set podLabels.version=${env.GIT_COMMIT} --set podLabels.buildID=${env.GIT_COMMIT}-${env.BUILD_NUMBER}; then
+                    kubectl -n dev describe pod -l version=${env.GIT_COMMIT}
+                    kubectl -n dev logs --tail=2000 -l version=${env.GIT_COMMIT}
+                    exit 1
+                    fi
+                """
+    } catch (Exception e) {
+        echo "Error deploying ${microservice}: ${e.getMessage()}"
+    }
+}

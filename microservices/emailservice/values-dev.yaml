@@ -1,0 +1,21 @@
+app:
+  name: emailservice
+  version: v0.4.1
+  replicaCount: 2
+
+image:
+  repository: gcr.io/google-samples/microservices-demo/emailservice
+
+container:
+  port: 8080
+  env:
+  - name: PORT
+    value: "8080"
+  - name: DISABLE_TRACING
+    value: "1"
+  - name: DISABLE_PROFILER
+    value: "1"
+
+service:
+  type: ClusterIP
+  port: 5000
